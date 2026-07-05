@@ -108,6 +108,8 @@ class Settings:
 
     # --- Terminal / admin ------------------------------------------------------
     admin_pin_hash: str = DEFAULT_PIN_HASH
+    # The PIN before the last `pin set`, so `pin undo` can toggle back.
+    previous_admin_pin_hash: str = ""
     terminal_max_lines: int = 500
     terminal_idle_timeout_seconds: float = 60.0
 
@@ -135,7 +137,7 @@ settings = Settings()
 # toggle should never persist and leave the kiosk windowed after a reboot.
 PERSISTED_FIELDS = (
     "wpm", "tone_hz", "tolerance_percent", "brightness_percent",
-    "admin_pin_hash", "practice_words", "theme_name", "presets",
+    "admin_pin_hash", "previous_admin_pin_hash", "practice_words", "theme_name", "presets",
 )
 
 SETTINGS_FILE = Path(__file__).resolve().parent / "user_settings.json"

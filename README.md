@@ -202,7 +202,8 @@ For a cleaner kiosk look, also consider:
 ## The members' terminal
 
 Reached from Home via the lock icon + PIN keypad. It's a small
-command-style shell (prompt: `sherwood@morse ❯`), typed via the
+command-style shell (prompt: `sherwood@morse 14:30 ❯`, with a live
+clock), typed via the
 on-screen keyboard or by keying Morse. Anything that isn't a recognized
 command is treated as a scripted chat message (see `chat_responses.py`). A
 random message-of-the-day is shown on login; `man <command>` gives a
@@ -219,6 +220,8 @@ short manual page for any command below.
 | `test` / `selftest` | run the power-on self-test (key, then buzzer) |
 | `test key` / `test buzzer` | test just one component |
 | `calibrate` | key a few dots to auto-tune wpm/tolerance to your key |
+| `pin set <current> <new>` | change the terminal PIN (3-8 digits; needs current PIN) |
+| `pin undo <current>` | revert to the previous PIN (needs current PIN) |
 | `reset` | reset wpm/tone/tolerance/brightness to defaults |
 | `stats` | show session statistics |
 | `sysinfo` | plain settings/system summary |
@@ -247,8 +250,9 @@ The terminal auto-locks back to Home after `terminal_idle_timeout_seconds`
   `Settings.tolerance_percent` (0-100 -- drives the decoder's dot/dash,
   letter-gap, and word-gap windows). Both are also adjustable live via
   the terminal's `wpm`/`tol` commands, or let `calibrate` set them for you.
-- **Admin PIN**: `config.py` -> `admin_pin_hash`. Change it by computing
-  a new hash and pasting it in:
+- **Admin PIN**: easiest is the terminal's `pin set <current> <new>`
+  command (persists across restarts). To set it from code instead, edit
+  `config.py` -> `admin_pin_hash` with a fresh hash:
   ```
   python -c "import config; print(config.hash_pin('NEWPIN'))"
   ```

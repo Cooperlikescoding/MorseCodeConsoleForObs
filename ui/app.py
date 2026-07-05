@@ -20,7 +20,7 @@ from typing import Callable
 import config
 import theme
 from audio import create_tone_output
-from config import Settings, settings
+from config import Settings, hash_pin, settings
 from decoder import MorseDecoder
 from display_control import set_backlight_brightness
 from key_input import create_key_input
@@ -222,6 +222,24 @@ class MorseApp(tk.Tk):
     def set_tolerance_percent(self, n: int) -> None:
         settings.tolerance_percent = n
         self.persist_settings()
+
+    def change_pin(self, new_pin: str) -> None:
+        """Set a new admin PIN, remembering the old one so `pin undo` can
+        toggle back. Only the hashes are stored, never the plaintext."""
+        settings.previous_admin_pin_hash = settings.admin_pin_hash
+        settings.admin_pin_hash = hash_pin(new_pin)
+        self.persist_settings()
+
+    def undo_pin(self) -> bool:
+        """Swap the current and previous PIN hashes (so undo is itself
+        undoable). Returns False if there's no previous PIN recorded."""
+        if not settings.previous_admin_pin_hash:
+            return False
+        settings.admin_pin_hash, settings.previous_admin_pin_hash = (
+            settings.previous_admin_pin_hash, settings.admin_pin_hash,
+        )
+        self.persist_settings()
+        return True
 
     def set_brightness_percent(self, n: int) -> bool:
         settings.brightness_percent = n

@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import platform
 import random
+import time
 import tkinter as tk
 from typing import Callable
 
 import theme
 from audio import schedule_message_playback
-from config import settings
+from config import hash_pin, settings
 from logging_setup import LOG_FILE
 from chat_responses import get_response
 from theme import mono_font
@@ -26,7 +27,16 @@ from ui.keyboard import OnScreenKeyboard
 from ui.keyed_display import UNRECOGNIZED_PLACEHOLDER
 from ui.widgets import RoundedButton, RoundedPanel
 
-PROMPT = "sherwood@morse ❯ "
+PROMPT_HOST = "sherwood@morse"
+PROMPT_ARROW = "❯"
+
+
+def _prompt(now_hhmm: str | None = None) -> str:
+    """The shell prompt, with the current time tucked in just behind the
+    arrow: 'sherwood@morse 14:30 ❯ '."""
+    if now_hhmm is None:
+        now_hhmm = time.strftime("%H:%M")
+    return f"{PROMPT_HOST} {now_hhmm} {PROMPT_ARROW} "
 
 # A tiny hand-built pixel font, just for the letters "MORSE" -- built
 # programmatically rather than hand-drawn as one block of ASCII art so
@@ -75,6 +85,20 @@ MOTD_MESSAGES = [
     "Fun fact: SOS is '... --- ...' -- and it reads the same either way.",
     "A good operator sends as well as they receive.",
     "Tip: try 'calibrate' if the key feels too twitchy or too slow.",
+    "88 to the family, 73 to the gang -- happy keying!",
+    "CQ CQ CQ -- the airwaves are calling, is anybody listening?",
+    "The best DX is the friend you make on the other end.",
+    "Slow is smooth, smooth is fast. Key at your own pace.",
+    "Old-timer's secret: everyone was once a beginner sending '?'.",
+    "QRT? Never. There's always one more contact to make.",
+    "Dah-di-dah-dit dah-dah-di-dah -- that's 'CK', now you know!",
+    "Static is just the universe saying hello. Key back.",
+    "Fun fact: 'E' is a single dit -- the fastest letter to send.",
+    "A steady fist beats a fast one. Rhythm is everything.",
+    "Tip: tap a letter in the practice word to hear how it sounds.",
+    "Real radios have knobs. This one has you. Go make some noise!",
+    "Elmers welcome newcomers -- pass on what you learn.",
+    "73 means 'best regards'. 88 means 'love and kisses'. Choose wisely!",
 ]
 
 # Fictional process table for `ps`/`top` -- flavour only, not real stats
@@ -99,6 +123,8 @@ test / selftest  run the power-on self-test (key then buzzer)
 test key       watch physical key press/release events for 5s
 test buzzer    sound the tone/buzzer briefly
 calibrate      key a few dots to auto-tune wpm/tolerance to your key
+pin set <current> <new>      change the terminal PIN
+pin undo <current>           revert to the previous PIN
 reset          reset wpm/tone/tolerance/brightness to defaults
 stats          show session statistics
 sysinfo        plain settings/system summary
@@ -133,6 +159,9 @@ MAN_PAGES: dict[str, tuple[str, str]] = {
     "test": ("test [key|buzzer]", "Run the power-on self-test, or test a single component."),
     "selftest": ("selftest", "Alias for 'test' with no arguments."),
     "calibrate": ("calibrate", "Key a few dots to auto-tune wpm and tolerance to your key's feel."),
+    "pin": ("pin set <current> <new> | pin undo <current>",
+            "Change the terminal PIN (3-8 digits), or revert to the previous one. "
+            "Both require the current PIN. Only PIN hashes are stored, never the plaintext."),
     "reset": ("reset", "Reset wpm, tone, tolerance, and brightness to their defaults."),
     "stats": ("stats", "Show session statistics: uptime, letters decoded, words completed."),
     "sysinfo": ("sysinfo", "Show a plain-text settings/system summary."),
@@ -169,6 +198,19 @@ def _parse_int(value: str, lo: int, hi: int, name: str) -> int:
     if not (lo <= n <= hi):
         raise CommandError(f"{name} must be between {lo} and {hi}")
     return n
+
+
+def _redact_for_echo(message: str) -> str:
+    """Mask the arguments of a `pin` command before echoing it into the
+    visible scrollback, so a PIN typed in the clear doesn't linger on
+    screen. Any argument containing a digit becomes bullets."""
+    parts = message.split()
+    if not parts or parts[0].lower() != "pin":
+        return message
+    masked = [parts[0]] + [
+        ("•" * len(p) if any(c.isdigit() for c in p) else p) for p in parts[1:]
+    ]
+    return " ".join(masked)
 
 
 class TerminalScreen(tk.Frame):
@@ -231,8 +273,9 @@ class TerminalScreen(tk.Frame):
 
         input_row = tk.Frame(self, bg=theme.current.base)
         input_row.grid(row=2, column=0, sticky="ew", padx=12)
+        self.prompt_var = tk.StringVar(value=_prompt())
         tk.Label(
-            input_row, text=PROMPT, font=mono_font(14, "bold"),
+            input_row, textvariable=self.prompt_var, font=mono_font(14, "bold"),
             bg=theme.current.base, fg=theme.current.mauve,
         ).pack(side="left")
         self.input_var = tk.StringVar(value="")
@@ -308,7 +351,7 @@ class TerminalScreen(tk.Frame):
         self.reset_input()
         if not message:
             return
-        self._print(f"{PROMPT}{message}", "command")
+        self._print(f"{_prompt()}{_redact_for_echo(message)}", "command")
         self._dispatch(message)
 
     # --- command dispatch ---
@@ -328,6 +371,7 @@ class TerminalScreen(tk.Frame):
             "test": self._cmd_test,
             "selftest": self._cmd_selftest,
             "calibrate": self._cmd_calibrate,
+            "pin": self._cmd_pin,
             "reset": self._cmd_reset,
             "stats": self._cmd_stats,
             "sysinfo": self._cmd_sysinfo,
@@ -487,6 +531,38 @@ class TerminalScreen(tk.Frame):
             f"Calibrated from avg dot {avg * 1000:.0f}ms -> wpm {new_wpm}, tolerance {new_tolerance}",
             "success",
         )
+
+    def _cmd_pin(self, args: list[str]) -> None:
+        usage = "usage: pin set <current> <new>  |  pin undo <current>"
+        if not args:
+            raise CommandError(usage)
+        sub = args[0].lower()
+
+        if sub == "set":
+            if len(args) < 3:
+                raise CommandError("usage: pin set <current> <new>")
+            current, new = args[1], args[2]
+            if hash_pin(current) != settings.admin_pin_hash:
+                raise CommandError("current PIN is incorrect")
+            if not (new.isdigit() and 3 <= len(new) <= 8):
+                raise CommandError("new PIN must be 3 to 8 digits")
+            if hash_pin(new) == settings.admin_pin_hash:
+                raise CommandError("new PIN is the same as the current one")
+            self._app.change_pin(new)
+            self._print("PIN changed. Use 'pin undo <new-pin>' to revert.", "success")
+
+        elif sub == "undo":
+            if len(args) < 2:
+                raise CommandError("usage: pin undo <current>")
+            current = args[1]
+            if hash_pin(current) != settings.admin_pin_hash:
+                raise CommandError("current PIN is incorrect")
+            if self._app.undo_pin():
+                self._print("PIN reverted to the previous one.", "success")
+            else:
+                raise CommandError("no previous PIN to undo to")
+        else:
+            raise CommandError(usage)
 
     def _cmd_reset(self, args: list[str]) -> None:
         self._app.reset_adjustable_settings()
@@ -705,6 +781,9 @@ class TerminalScreen(tk.Frame):
             self._idle_after_id = None
 
     def _check_idle(self) -> None:
+        # This 1s loop only runs while the terminal is on-screen, so it's
+        # also a convenient tick for refreshing the prompt's live clock.
+        self.prompt_var.set(_prompt())
         if self._app.now() - self._last_activity >= settings.terminal_idle_timeout_seconds:
             self._idle_after_id = None
             self._print("Session locked due to inactivity.", "info")

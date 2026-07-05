@@ -27,6 +27,18 @@ def test_save_and_load_roundtrip(tmp_path, monkeypatch):
     assert restored.presets["kids"] == {"wpm": 5, "tone_hz": 600, "tolerance_percent": 90}
 
 
+def test_pin_hashes_persist(tmp_path, monkeypatch):
+    # A changed PIN (and the previous one, for `pin undo`) must survive a restart.
+    monkeypatch.setattr(config, "SETTINGS_FILE", tmp_path / "user_settings.json")
+    original = Settings(admin_pin_hash="newhash", previous_admin_pin_hash="oldhash")
+    save_settings(original)
+
+    restored = Settings()
+    load_settings_into(restored)
+    assert restored.admin_pin_hash == "newhash"
+    assert restored.previous_admin_pin_hash == "oldhash"
+
+
 def test_load_missing_file_is_a_noop(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SETTINGS_FILE", tmp_path / "does_not_exist.json")
     target = Settings(wpm=8)
