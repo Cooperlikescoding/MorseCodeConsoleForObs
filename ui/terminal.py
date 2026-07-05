@@ -91,7 +91,7 @@ MOTD_MESSAGES = [
     "Slow is smooth, smooth is fast. Key at your own pace.",
     "Old-timer's secret: everyone was once a beginner sending '?'.",
     "QRT? Never. There's always one more contact to make.",
-    "Dah-di-dah-dit dah-dah-di-dah -- that's 'CK', now you know!",
+    "Dah-di-dah-dit dah-dah-di-dah -- that's 'CQ', now you know!",
     "Static is just the universe saying hello. Key back.",
     "Fun fact: 'E' is a single dit -- the fastest letter to send.",
     "A steady fist beats a fast one. Rhythm is everything.",

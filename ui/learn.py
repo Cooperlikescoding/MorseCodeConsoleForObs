@@ -2,7 +2,8 @@
 time, in order. Separate from the free-practice Home screen -- here
 there's a specific right answer, checked as it's keyed, before moving on
 to the next letter. Kept deliberately simple: no scoring, no branching,
-just A to Z.
+just A to Z. Tapping the displayed letter opens tap-to-learn for it, in
+case you want a hint before keying.
 """
 
 from __future__ import annotations
@@ -11,9 +12,11 @@ import tkinter as tk
 from typing import Callable
 
 import theme
+from audio import ToneOutput
 from morse_code import LETTERS
 from theme import mono_font
 from ui.key_indicator import KeyIndicator
+from ui.tap_to_learn import TapToLearnPopup
 from ui.widgets import RoundedButton
 
 ALPHABET = list(LETTERS.keys())
@@ -22,10 +25,13 @@ RESTART_DELAY_MS = 2000
 
 
 class LearnScreen(tk.Frame):
-    def __init__(self, parent, on_exit: Callable[[], None], **kwargs):
+    def __init__(self, parent, tone: ToneOutput, on_exit: Callable[[], None], **kwargs):
         super().__init__(parent, bg=theme.current.base, **kwargs)
+        self._tone = tone
         self._on_exit = on_exit
         self._index = 0
+        self._complete = False
+        self._tap_to_learn_popup: TapToLearnPopup | None = None
         self._build()
 
     def _build(self) -> None:
@@ -46,8 +52,16 @@ class LearnScreen(tk.Frame):
 
         self.letter_label = tk.Label(
             self, font=mono_font(120, "bold"), bg=theme.current.base, fg=theme.current.green,
+            cursor="hand2",
         )
         self.letter_label.pack(expand=True)
+        self.letter_label.bind("<Button-1>", self._on_tap_letter)
+
+        self.hint_label = tk.Label(
+            self, text="(tap the letter to hear/see it)", font=mono_font(11),
+            bg=theme.current.base, fg=theme.current.overlay,
+        )
+        self.hint_label.pack()
 
         self.feedback_label = tk.Label(
             self, font=mono_font(16, "bold"), bg=theme.current.base, fg=theme.current.subtext,
@@ -72,6 +86,8 @@ class LearnScreen(tk.Frame):
         self.key_indicator.stop_growing()
 
     def on_decoded_letter(self, letter: str | None, pattern: str) -> None:
+        if self._complete:
+            return  # ignore keying during the "you finished!" pause
         target = ALPHABET[self._index]
         if letter == target:
             self.feedback_label.configure(text="Correct!", fg=theme.current.green)
@@ -84,20 +100,32 @@ class LearnScreen(tk.Frame):
         pass  # not meaningful mid-letter in this mode
 
     def _show_current(self) -> None:
+        self._complete = False
         letter = ALPHABET[self._index]
-        self.letter_label.configure(text=letter)
+        self.letter_label.configure(text=letter, fg=theme.current.green)
+        self.hint_label.configure(text="(tap the letter to hear/see it)")
         self.progress_label.configure(text=f"Letter {self._index + 1} of {len(ALPHABET)}")
         self.feedback_label.configure(text="Key this letter on the practice key.", fg=theme.current.subtext)
 
     def _advance(self) -> None:
         self._index += 1
         if self._index >= len(ALPHABET):
-            self.letter_label.configure(text="\U0001F389")
+            self._complete = True
+            self.letter_label.configure(text="A-Z", fg=theme.current.mauve)
+            self.hint_label.configure(text="")
             self.progress_label.configure(text=f"Letter {len(ALPHABET)} of {len(ALPHABET)}")
             self.feedback_label.configure(text="You learned the whole alphabet! Starting over...", fg=theme.current.green)
             self.after(RESTART_DELAY_MS, self.enter)
             return
         self._show_current()
+
+    def _on_tap_letter(self, _event) -> None:
+        if self._complete:
+            return
+        letter = ALPHABET[self._index]
+        if self._tap_to_learn_popup is not None:
+            self._tap_to_learn_popup.close()
+        self._tap_to_learn_popup = TapToLearnPopup(self, self._tone, letter)
 
     def _exit(self) -> None:
         self._on_exit()

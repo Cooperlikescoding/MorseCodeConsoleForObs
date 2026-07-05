@@ -47,9 +47,10 @@ class MorseApp(tk.Tk):
         # non-fullscreen size, it's also what Tkinter falls back to if
         # fullscreen is toggled off (e.g. via Escape during development),
         # instead of shrinking to whatever the smallest widget layout fits.
+        self._is_fullscreen = False
         self.geometry(settings.window_size)
         if settings.fullscreen:
-            self.attributes("-fullscreen", True)
+            self._apply_fullscreen(True)
 
         self._session_start = self._now()
         self._stats = {"letters_decoded": 0, "letters_unrecognized": 0, "words_completed": 0}
@@ -97,7 +98,7 @@ class MorseApp(tk.Tk):
             on_open_terminal=self._request_terminal_access, on_open_learn=self.show_learn,
         )
         self.terminal = TerminalScreen(self._screen_container, app=self, on_exit=self.show_home)
-        self.learn = LearnScreen(self._screen_container, on_exit=self.show_home)
+        self.learn = LearnScreen(self._screen_container, tone=self.tone, on_exit=self.show_home)
         self.boot = BootScreen(self._screen_container, on_done=self.show_home)
         for screen in (self.home, self.terminal, self.learn, self.boot):
             screen.grid(row=0, column=0, sticky="nsew")
@@ -196,12 +197,33 @@ class MorseApp(tk.Tk):
         self._active_screen.on_decoded_word_space()
 
     def _toggle_fullscreen(self) -> None:
-        self.attributes("-fullscreen", not self.attributes("-fullscreen"))
+        self._apply_fullscreen(not self._is_fullscreen)
 
     def set_fullscreen(self, value: bool) -> None:
         """Dev convenience only -- deliberately not persisted (see
         config.PERSISTED_FIELDS) so the kiosk always boots fullscreen."""
-        self.attributes("-fullscreen", value)
+        self._apply_fullscreen(value)
+
+    def _apply_fullscreen(self, value: bool) -> None:
+        """Uses overrideredirect + explicit screen-size geometry rather
+        than the `-fullscreen` window attribute. `-fullscreen` asks a
+        window manager to honor an EWMH fullscreen hint -- on a bare
+        kiosk X session with no (or a minimal) window manager, that
+        request is never actually processed, so runtime toggling did
+        nothing even though the console *looked* fullscreen at boot
+        (it's just borderless and sized to match the screen already).
+        This approach doesn't depend on a window manager at all.
+        """
+        self._is_fullscreen = value
+        self.withdraw()  # avoid a visible flicker while changing decorations
+        self.overrideredirect(value)
+        if value:
+            width, height = self.winfo_screenwidth(), self.winfo_screenheight()
+            self.geometry(f"{width}x{height}+0+0")
+        else:
+            self.geometry(settings.window_size)
+        self.deiconify()
+        self.update_idletasks()
 
     def on_close(self) -> None:
         self.key_input.stop()

@@ -30,3 +30,19 @@ def test_subcommand_words_are_preserved():
     # only digit-bearing args get masked; the 'set'/'undo' verbs stay
     assert _redact_for_echo("pin set").startswith("pin set")
     assert "set" in _redact_for_echo("pin set 1234 5678")
+
+
+def test_motd_does_not_contain_the_ck_typo():
+    # CQ = -.-. --.- ; a fixed typo previously mislabeled this as 'CK'.
+    import ui.terminal as terminal_module
+    assert not any("'CK'" in m for m in terminal_module.MOTD_MESSAGES)
+    assert any("'CQ'" in m for m in terminal_module.MOTD_MESSAGES)
+
+
+def test_no_color_emoji_in_home_or_learn_button_labels():
+    # Color-emoji glyphs (lock/book/confetti) render as a tofu box on
+    # Pi images without a color-emoji font; only plain text should be used.
+    for path in ("ui/home.py", "ui/learn.py"):
+        text = open(path, encoding="utf-8").read()
+        codepoints = [ord(c) for c in text if ord(c) >= 0x1F000]
+        assert not codepoints, f"{path} still contains emoji: {codepoints}"

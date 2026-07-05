@@ -65,14 +65,17 @@ class HomeScreen(tk.Frame):
         button_row = tk.Frame(footer, bg=theme.current.base)
         button_row.pack(side="right")
 
+        # Plain text, deliberately no emoji: color-emoji glyphs (lock/book/
+        # etc) need a color-emoji font that isn't installed on every Pi
+        # image and render as a tofu box without one.
         terminal_btn = RoundedButton(
-            button_row, text="\U0001F512 Terminal", font=mono_font(11, "bold"),
+            button_row, text="Terminal (PIN)", font=mono_font(11, "bold"),
             command=self._on_open_terminal,
         )
         terminal_btn.pack(side="right")
 
         learn_btn = RoundedButton(
-            button_row, text="\U0001F4D6 Learn", font=mono_font(11, "bold"),
+            button_row, text="Learn", font=mono_font(11, "bold"),
             command=self._on_open_learn,
         )
         learn_btn.pack(side="right", padx=(0, 8))
