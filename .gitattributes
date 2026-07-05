@@ -1,0 +1,3 @@
+# Normalize line endings: store as LF in the repo, check out native.
+# Keeps the tree clean when it's edited on Windows and run on the Pi (Linux).
+* text=auto eol=lf

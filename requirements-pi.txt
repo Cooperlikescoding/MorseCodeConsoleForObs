@@ -1,0 +1,8 @@
+-r requirements.txt
+
+# Real GPIO Morse key + passive buzzer (TonalBuzzer) support for the Pi.
+gpiozero>=2.0
+
+# The Pi 5 uses a new GPIO chip (RP1) that the legacy RPi.GPIO backend
+# does not support. gpiozero needs the lgpio pin factory instead.
+lgpio>=0.2
