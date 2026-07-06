@@ -256,12 +256,24 @@ class TerminalScreen(tk.Frame):
         # keyboard focus or showing a text I-beam -- on the touchscreen a
         # focus-grabbing Text widget interfered with taps landing on the
         # on-screen keyboard below it.
+        # A wide, always-visible scrollbar rather than drag-to-scroll --
+        # dragging a finger on a Text widget fights its built-in
+        # click-to-select behavior, so a real touch target for the thumb
+        # is the more reliable way to review scrollback.
+        scrollbar = tk.Scrollbar(
+            output_card.body, orient="vertical", width=26, bd=0, highlightthickness=0,
+            troughcolor=theme.current.mantle, bg=theme.current.surface1,
+            activebackground=theme.current.surface2,
+        )
+        scrollbar.pack(side="right", fill="y", padx=(0, 8), pady=8)
+
         self.output = tk.Text(
             output_card.body, bg=theme.current.mantle, fg=theme.current.text, font=mono_font(13),
             state="disabled", wrap="word", bd=0, highlightthickness=0,
-            takefocus=0, cursor="arrow",
+            takefocus=0, cursor="arrow", yscrollcommand=scrollbar.set,
         )
-        self.output.pack(fill="both", expand=True, padx=8, pady=8)
+        self.output.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
+        scrollbar.configure(command=self.output.yview)
         self.output.tag_configure("command", foreground=theme.current.mauve)
         self.output.tag_configure("success", foreground=theme.current.green)
         self.output.tag_configure("error", foreground=theme.current.red)

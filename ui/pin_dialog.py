@@ -30,6 +30,15 @@ class PinDialog(tk.Toplevel):
         self.configure(bg=theme.current.base)
         self.transient(parent)
         self.attributes("-topmost", True)
+        # The main window runs override-redirected for fullscreen (see
+        # app.py's _apply_fullscreen) -- on a bare kiosk session with no/
+        # minimal window manager, override-redirect windows sit above
+        # normal WM-managed ones regardless of "-topmost", so a plain
+        # Toplevel here could be created successfully but rendered behind
+        # the fullscreen main window, making the PIN pad invisible.
+        # Override-redirecting this dialog too keeps it in the same
+        # unmanaged stacking class, so it can actually appear on top.
+        self.overrideredirect(True)
         self.grab_set()  # modal: block interaction with the rest of the app
 
         self._build()
@@ -38,6 +47,8 @@ class PinDialog(tk.Toplevel):
         # platforms, and a fixed size previously clipped the bottom rows.
         self.update_idletasks()
         self._center_over(parent)
+        self.lift()
+        self.focus_force()
 
         self.protocol("WM_DELETE_WINDOW", self._cancel)
 
