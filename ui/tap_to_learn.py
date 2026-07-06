@@ -35,6 +35,13 @@ class TapToLearnPopup(tk.Toplevel):
         self.configure(bg=theme.current.base)
         self.transient(parent)
         self.attributes("-topmost", True)
+        # The main window runs override-redirected for fullscreen (see
+        # app.py's _apply_fullscreen) -- on a bare kiosk session with no/
+        # minimal window manager, override-redirect windows sit above
+        # normal WM-managed ones regardless of "-topmost", so a plain
+        # Toplevel here could be created successfully but rendered behind
+        # the fullscreen main window (see the same fix in pin_dialog.py).
+        self.overrideredirect(True)
 
         self._build()
         # Size the window to what its widgets actually need, not a guessed
@@ -42,6 +49,8 @@ class TapToLearnPopup(tk.Toplevel):
         # platforms, and a fixed size previously clipped the Close button.
         self.update_idletasks()
         self._center_over(parent)
+        self.lift()
+        self.focus_force()
 
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.after(150, self._play)
