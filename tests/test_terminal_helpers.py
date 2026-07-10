@@ -39,6 +39,39 @@ def test_motd_does_not_contain_the_ck_typo():
     assert any("'CQ'" in m for m in terminal_module.MOTD_MESSAGES)
 
 
+def test_output_drag_scroll_does_not_raise():
+    # Regression: Text.scan_dragto() in this Tkinter binding doesn't accept
+    # a `gain` keyword at all (it's hardcoded to 10x internally), so the
+    # touch-drag-to-scroll handler must call the underlying Tcl widget
+    # command directly instead of the Python wrapper.
+    import tkinter as tk
+    import pytest
+
+    from config import settings
+
+    settings.fullscreen = False
+
+    try:
+        from ui.app import MorseApp
+        app = MorseApp()
+    except tk.TclError:
+        pytest.skip("no display available")
+
+    try:
+        for i in range(50):
+            app.terminal._print(f"line {i}", "response")
+        app.update()
+
+        class FakeEvent:
+            def __init__(self, x, y):
+                self.x, self.y = x, y
+
+        app.terminal._start_output_scroll(FakeEvent(50, 300))
+        app.terminal._drag_output_scroll(FakeEvent(50, 500))
+    finally:
+        app.on_close()
+
+
 def test_no_color_emoji_in_home_or_learn_button_labels():
     # Color-emoji glyphs (lock/book/confetti) render as a tofu box on
     # Pi images without a color-emoji font; only plain text should be used.

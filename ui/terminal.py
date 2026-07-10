@@ -256,10 +256,11 @@ class TerminalScreen(tk.Frame):
         # keyboard focus or showing a text I-beam -- on the touchscreen a
         # focus-grabbing Text widget interfered with taps landing on the
         # on-screen keyboard below it.
-        # A wide, always-visible scrollbar rather than drag-to-scroll --
-        # dragging a finger on a Text widget fights its built-in
-        # click-to-select behavior, so a real touch target for the thumb
-        # is the more reliable way to review scrollback.
+        # Two ways to scroll on the touchscreen (no mouse wheel): a wide,
+        # always-visible scrollbar whose thumb is a big touch target, plus
+        # finger drag-to-scroll on the log itself (bound below). The
+        # scrollbar is the discoverable fallback; the drag is the natural
+        # phone-like gesture.
         scrollbar = tk.Scrollbar(
             output_card.body, orient="vertical", width=26, bd=0, highlightthickness=0,
             troughcolor=theme.current.mantle, bg=theme.current.surface1,
@@ -274,6 +275,12 @@ class TerminalScreen(tk.Frame):
         )
         self.output.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
         scrollbar.configure(command=self.output.yview)
+        # Drag-to-scroll: a Text widget's default drag behavior is to
+        # select text, not scroll. scan_mark/scan_dragto is Tkinter's
+        # built-in "drag to pan the view" mechanism; returning "break"
+        # stops the default select-drag binding from also firing.
+        self.output.bind("<ButtonPress-1>", self._start_output_scroll)
+        self.output.bind("<B1-Motion>", self._drag_output_scroll)
         self.output.tag_configure("command", foreground=theme.current.mauve)
         self.output.tag_configure("success", foreground=theme.current.green)
         self.output.tag_configure("error", foreground=theme.current.red)
@@ -316,6 +323,20 @@ class TerminalScreen(tk.Frame):
         an action (e.g. a theme switch) that happened outside a command
         the user typed directly into this screen."""
         self._print(text, kind)
+
+    def _start_output_scroll(self, event) -> str:
+        self.output.scan_mark(event.x, event.y)
+        return "break"
+
+    def _drag_output_scroll(self, event) -> str:
+        # gain=1 for a natural 1:1 "drag the content with your finger"
+        # feel -- Tk's default gain (10x) is tuned for fast canvas panning
+        # and would feel wildly oversensitive for reading text. Python's
+        # Text.scan_dragto() wrapper hardcodes the default gain and
+        # doesn't expose it as an argument, so call the underlying Tcl
+        # command directly (the Tk widget command *does* take a gain).
+        self.output.tk.call(self.output._w, "scan", "dragto", event.x, event.y, 1)
+        return "break"
 
     def reset_input(self) -> None:
         self._input_buffer = ""
